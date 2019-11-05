@@ -88,7 +88,7 @@ vptree *buildvp(double *X, int n, int d){
 	clock_gettime(CLOCK_MONOTONIC, &finish);
 	elapsed = (finish.tv_sec - start.tv_sec);
 	elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
-	printf("%i %lf\n", n,elapsed *4 / 5);
+	printf("%i %lf\n", n,elapsed);
 	
 	
 	free(distances);

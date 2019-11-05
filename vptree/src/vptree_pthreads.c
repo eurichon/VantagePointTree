@@ -5,14 +5,82 @@
 #include <math.h>
 #include <time.h>
 #include <string.h>
+#include <limits.h> 
 #include "vptree.h"
 
-#define NUM_OF_THREAD 50
+#define NUM_OF_THREAD 40
+
+typedef struct{
+	int start,end;
+	int d;
+	double *vp;
+	double **arrayset;
+	double *distances;
+}LoopData;
+
+void *loopParallel(void *data);
+
+typedef struct 
+{ 
+    int front, rear, size; 
+    unsigned capacity; 
+    int* array; 
+	pthread_mutex_t *mut;
+}Queue; 
+
+
+Queue* createQueue(unsigned capacity) 
+{ 
+    Queue* queue = ( Queue*) malloc(sizeof(Queue)); 
+    queue->capacity = capacity; 
+    queue->front = queue->size = 0;  
+    queue->rear = capacity - 1;  // This is important, see the enqueue 
+    queue->array = (int*) malloc(queue->capacity * sizeof(int)); 
+	queue->mut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
+	pthread_mutex_init (queue->mut, NULL);
+    return queue; 
+} 
+
+int isFull(Queue* queue) 
+{  
+	return (queue->size == queue->capacity);  
+} 
+  
+// Queue is empty when size is 0 
+int isEmpty(Queue* queue) 
+{  
+	return (queue->size == 0); 
+} 
+
+void enqueue(Queue* queue, int item) 
+{ 
+    if (isFull(queue)) 
+        return; 
+    queue->rear = (queue->rear + 1)%queue->capacity; 
+    queue->array[queue->rear] = item; 
+    queue->size = queue->size + 1; 
+    //printf("%d enqueued to queue\n", item); 
+} 
+  
+// Function to remove an item from queue.  
+// It changes front and size 
+int dequeue(Queue* queue) 
+{ 
+    if (isEmpty(queue)) 
+        return INT_MIN; 
+    int item = queue->array[queue->front]; 
+    queue->front = (queue->front + 1)%queue->capacity; 
+    queue->size = queue->size - 1; 
+	//printf("%d dequeued to queue\n", item); 
+    return item; 
+} 
+
 
 int curr_thread;
 pthread_mutex_t mutexId;
 pthread_attr_t attr;
 pthread_t thread[NUM_OF_THREAD];
+Queue *q;
 
 
 /* Usefull struct to pass the data from the recursive function to the thread*/
@@ -20,7 +88,8 @@ typedef struct{
 	vptree *T;
 	int index,
 		start,
-		end;
+		end,
+		thread_id;
 	double **arrayset,
 			*distances;
 }TreeData;
@@ -91,6 +160,13 @@ vptree *buildvp(double *X, int n, int d){
 	}
 	
 	//==============================parallel segment===================================
+	
+	
+	q = createQueue(NUM_OF_THREAD);
+	for(int i = 0;i < NUM_OF_THREAD; ++i){
+		enqueue(q,i);
+	}
+	
 	void *status;
 	pthread_mutex_init(&mutexId, NULL);
 	pthread_attr_init(&attr);
@@ -189,9 +265,41 @@ void createRecursivly(vptree *T, int index, double **arrayset, double *distances
 		
 		//to add in parallel
 		/*calculate distances between all points and  the vantage point*/
-		for(unsigned i = start; i < (end - 1); ++i){
-			getDistanceSquared(arrayset[i], T->tree[index], &distances[i], T->d);
+		int thread_id;
+		pthread_mutex_lock (q->mut);
+		if(size > 100000 && !isEmpty(q)){
+			printf("papapa\n");
+			thread_id = dequeue(q);
+			
+			LoopData *d = (LoopData*)malloc(sizeof(LoopData));
+			d->start= start;
+			d->end/2;
+			d->d = T->d;
+			d->arrayset = arrayset;
+			d->distances = distances;
+			d->vp = T->tree[index];
+
+			pthread_create(&thread[thread_id], &attr, loopParallel, (void *)&thread_id);
+			pthread_mutex_unlock (q->mut);
+			for(unsigned i = end/2; i < (end - 1); ++i){
+				getDistanceSquared(arrayset[i], T->tree[index], &distances[i], T->d);
+			}
+			pthread_join(thread[thread_id], NULL);
+		}else{
+			pthread_mutex_unlock (q->mut);
+			for(unsigned i = start; i < (end - 1); ++i){
+				getDistanceSquared(arrayset[i], T->tree[index], &distances[i], T->d);
+			}
 		}
+		
+		
+		
+		//enqueue(q, d->thread_id);
+		
+		
+		
+		
+	
 		
 		/*find the median*/
 		int k = (size - 1)/2;
@@ -201,9 +309,8 @@ void createRecursivly(vptree *T, int index, double **arrayset, double *distances
 		
 		/*Check how many threads exist if there are enough pass the data to another thread
 		to continue the recursive creation in parallel*/
-		pthread_mutex_lock (&mutexId);
-		if(curr_thread < NUM_OF_THREAD){
-			/*create a structure to pass the necessary data*/
+		pthread_mutex_lock (q->mut);
+		if(!isEmpty(q)){
 			TreeData *leftSubTree = (TreeData *)malloc(sizeof(TreeData));
 			leftSubTree->T = T;
 			leftSubTree->index = (2 * index + 1);
@@ -211,13 +318,15 @@ void createRecursivly(vptree *T, int index, double **arrayset, double *distances
 			leftSubTree->distances = distances;
 			leftSubTree->start = start;
 			leftSubTree->end = start + mean;
+			leftSubTree->thread_id = dequeue(q);
 			
-			pthread_create(&thread[curr_thread], &attr, recursiveJob, (void *)leftSubTree);
+			pthread_create(&thread[leftSubTree->thread_id], &attr, recursiveJob, (void *)leftSubTree);
 			curr_thread = curr_thread + 1;
-			pthread_mutex_unlock (&mutexId);
+			pthread_mutex_unlock (q->mut);
+			
 		}else{
 			/* If there are not enough threads continue in serial*/
-			pthread_mutex_unlock (&mutexId);
+			pthread_mutex_unlock (q->mut);
 			createRecursivly(T, (2 * index + 1), arrayset, distances, start, start + mean);
 		}
 		
@@ -231,9 +340,21 @@ by passing all the appropriate arguments*/
 void *recursiveJob(void *data){
 	TreeData *d = (TreeData *)data;
 	createRecursivly(d->T, d->index, d->arrayset, d->distances, d->start, d->end);
-	//free(d);
 	pthread_exit(NULL);
 }
+
+
+
+
+void *loopParallel(void *data){
+	LoopData *d = (LoopData *)data;
+	for(int i = d->start; i < d->end; ++i){
+		getDistanceSquared(d->arrayset[i], d->vp, &(d->distances[i]), d->d);
+	}
+	pthread_exit(NULL);
+}
+
+
 
 /*Swaps two pointers*/
 void swap(double **n1, double **n2) {
