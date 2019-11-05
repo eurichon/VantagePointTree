@@ -111,6 +111,8 @@ vptree *buildvp(double *X, int n, int d){
         }
     }
 	
+	
+	
 	/* free the auxilary table */
 	free(distances);
 	free(dataset);	

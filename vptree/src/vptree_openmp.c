@@ -187,59 +187,62 @@ void createRecursivly(vptree* T, int index, double** arrayset, double* distances
 			createRecursivly(T, (2 * index + 1), arrayset, distances, start, start + mean);
 			createRecursivly(T, (2 * index + 2), arrayset, distances, start + mean, (end - 1));
 		}
+	
 	}
+}
 
-	void swap(double** n1, double** n2) {
-		double* temp = *n1;
-		*n1 = *n2;
-		*n2 = temp;
-	}
+void swap(double** n1, double** n2) {
+	double* temp = *n1;
+	*n1 = *n2;
+	*n2 = temp;
+}
 
-	void swap2(double* array, int i, int j) {
-		double temp = array[i];
-		array[i] = array[j];
-		array[j] = temp;
-	}
+void swap2(double* array, int i, int j) {
+	double temp = array[i];
+	array[i] = array[j];
+	array[j] = temp;
+}
 
-	double partition(double** arraySet, double* distances, int low, int high)
-	{
-		int pivot = distances[high];
-		int i = (low - 1);
-		for (int j = low; j <= high - 1; j++) {
-			if (distances[j] <= pivot) {
-				i++;
-				swap2(distances, i, j);
-				swap(&arraySet[i], &arraySet[j]);
-			}
+double partition(double** arraySet, double* distances, int low, int high)
+{
+	int pivot = distances[high];
+	int i = (low - 1);
+	for (int j = low; j <= high - 1; j++) {
+		if (distances[j] <= pivot) {
+			i++;
+			swap2(distances, i, j);
+			swap(&arraySet[i], &arraySet[j]);
 		}
-		swap2(distances, (i + 1), high);
-		swap(&arraySet[i + 1], &arraySet[high]);
-		return (i + 1);
 	}
+	swap2(distances, (i + 1), high);
+	swap(&arraySet[i + 1], &arraySet[high]);
+	return (i + 1);
+}
 
-	double kthSmallest(double** arraySet, double* distances, int left, int right, int k)
-	{
-		int temp = left;
-		while (left <= right) {
-			int pivotIndex = partition(arraySet, distances, left, right);
-			//printf("inside k largest %i %i\n",pivotIndex,k-1);
-			if ((pivotIndex - temp) == k - 1)
-				return sqrt(distances[pivotIndex]);
-			else if ((pivotIndex - temp) > k - 1)
-				right = pivotIndex - 1;
-			else
-				left = pivotIndex + 1;
-		}
-		return 0.0;
+double kthSmallest(double** arraySet, double* distances, int left, int right, int k)
+{
+	int temp = left;
+	while (left <= right) {
+		int pivotIndex = partition(arraySet, distances, left, right);
+		//printf("inside k largest %i %i\n",pivotIndex,k-1);
+		if ((pivotIndex - temp) == k - 1)
+			return sqrt(distances[pivotIndex]);
+		else if ((pivotIndex - temp) > k - 1)
+			right = pivotIndex - 1;
+		else
+			left = pivotIndex + 1;
 	}
+	return 0.0;
+}
 
-	void getDistanceSquared(double* p1, double* p2, double* result, int dim)
-	{
-		(*result) = 0;
-		for (unsigned int i = 0;i < dim; ++i) {
-			(*result) = (*result) + pow((p1[i] - p2[i]), 2);
-		}
-		//(*result) = sqrt((*result));
+void getDistanceSquared(double* p1, double* p2, double* result, int dim)
+{
+	(*result) = 0;
+	for (unsigned int i = 0;i < dim; ++i) {
+		(*result) = (*result) + pow((p1[i] - p2[i]), 2);
 	}
+	//(*result) = sqrt((*result));
+}
+
 
 
