@@ -265,7 +265,7 @@ void createRecursivly(vptree *T, int index, double **arrayset, double *distances
 		
 		//to add in parallel
 		/*calculate distances between all points and  the vantage point*/
-		int thread_id;
+		int thread_id = -1;
 		pthread_mutex_lock (q->mut);
 		if(size > 100000 && !isEmpty(q)){
 			printf("papapa\n");
@@ -285,6 +285,9 @@ void createRecursivly(vptree *T, int index, double **arrayset, double *distances
 				getDistanceSquared(arrayset[i], T->tree[index], &distances[i], T->d);
 			}
 			pthread_join(thread[thread_id], NULL);
+			pthread_mutex_lock (q->mut);
+			enqueue(q,thread_id);
+			pthread_mutex_unlock (q->mut);
 		}else{
 			pthread_mutex_unlock (q->mut);
 			for(unsigned i = start; i < (end - 1); ++i){
